@@ -1,0 +1,716 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>AgentBridge</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout concept: dark engineering console. Collapsible rail, top bar with repo filter, one detail-driven workspace per module. */
+:root{
+  --bg:#0a0e19; --surface:#10162a; --surface2:#151c33; --side:#0d1222; --line:#222b47;
+  --fg:#e8ecf7; --muted:#8a95b3; --accent:#5b93ff; --ai:#a184ff; --teal:#2dd4bf; --green:#4ade80;
+  --warn:#fbbf24; --crit:#ff7a7a; --gray:#8e96ab;
+  --font:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif; --mono:'Geist Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  --bg:#eef1f8; --surface:#ffffff; --surface2:#f3f5fb; --side:#f7f8fc; --line:#dbe1ef;
+  --fg:#111827; --muted:#56627f; --accent:#2a62e0; --ai:#6a4cd6; --teal:#0b8f80; --green:#1a8f4d;
+  --warn:#a56a00; --crit:#cc3434; --gray:#667087; color-scheme:light}}
+:root[data-theme="light"]{
+  --bg:#eef1f8; --surface:#ffffff; --surface2:#f3f5fb; --side:#f7f8fc; --line:#dbe1ef;
+  --fg:#111827; --muted:#56627f; --accent:#2a62e0; --ai:#6a4cd6; --teal:#0b8f80; --green:#1a8f4d;
+  --warn:#a56a00; --crit:#cc3434; --gray:#667087; color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 var(--font);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2,h3,h4,p{margin:0}
+h1{font-size:22px;font-weight:600;letter-spacing:-.01em;text-wrap:balance}
+h2{font-size:15px;font-weight:600}
+h3{font-size:13px;font-weight:600}
+.mono{font-family:var(--mono);font-size:12px}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+svg.i{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.app{display:grid;grid-template-columns:232px minmax(0,1fr);border:1px solid var(--line);border-radius:14px;background:var(--surface);min-height:calc(100vh - 28px);overflow:clip}
+.app.col{grid-template-columns:60px minmax(0,1fr)}
+.side{background:var(--side);border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.brand{display:flex;align-items:center;gap:10px;padding:2px 8px 14px;font-weight:600;letter-spacing:-.01em}
+.logo{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--accent),var(--ai));display:grid;place-items:center;flex:none}
+.logo svg{width:15px;height:15px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.nav{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;border:0;background:none;color:var(--muted);cursor:pointer;text-align:left;width:100%;white-space:nowrap}
+.nav:hover{background:var(--surface2);color:var(--fg)}
+.nav[aria-current="page"]{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--fg)}
+.nav[aria-current="page"] svg{color:var(--accent)}
+.col .nav span,.col .brand span,.col .navlabel{display:none}
+.navlabel{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:12px 10px 4px}
+.spacer{flex:1}
+.main{min-width:0;display:flex;flex-direction:column}
+.top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--line)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface2);font-size:12px;color:var(--fg);cursor:default;white-space:nowrap}
+button.chip{cursor:pointer}
+button.chip:hover{border-color:var(--accent)}
+.top select,.filters select{background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12px}
+.search{flex:1 1 160px;min-width:120px;max-width:320px;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px}
+.avatar{width:28px;height:28px;border-radius:50%;background:color-mix(in srgb,var(--ai) 30%,var(--surface2));display:grid;place-items:center;font-size:11px;font-weight:600;flex:none}
+.pop{position:relative}
+.popbox{position:absolute;right:0;top:36px;width:min(320px,86vw);background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:6px;z-index:20;box-shadow:0 12px 32px rgba(0,0,0,.35)}
+.popbox button{display:block;width:100%;text-align:left;background:none;border:0;padding:8px;border-radius:6px;cursor:pointer;font-size:12.5px}
+.popbox button:hover{background:var(--surface)}
+.sim{padding:7px 16px;font-size:12px;color:var(--muted);background:color-mix(in srgb,var(--warn) 9%,var(--surface));border-bottom:1px solid var(--line)}
+.sim b{color:var(--warn);font-weight:600}
+#view{padding:20px 16px 40px;display:flex;flex-direction:column;gap:18px;min-width:0}
+.head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.head p{color:var(--muted);margin-top:4px;max-width:62ch}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);cursor:pointer;font-size:13px;font-weight:500}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.ai{background:color-mix(in srgb,var(--ai) 20%,transparent);border-color:color-mix(in srgb,var(--ai) 50%,transparent)}
+.btn.sm{padding:4px 9px;font-size:12px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.panel{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
+.panel>h2,.panel>.ph{margin-bottom:10px}
+.ph{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.cols{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;align-items:start}
+.cols.even{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+.kpis{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(168px,1fr))}
+@media (max-width:1050px){.cols,.cols.even{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:860px){
+  .app,.app.col{grid-template-columns:minmax(0,1fr)}
+  .side{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:8px}
+  .brand,.navlabel,.spacer,.collapse{display:none}
+  .nav{width:auto;flex:none}
+  .col .nav span{display:inline}
+}
+.kpi{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:4px}
+.kpi:hover{border-color:var(--accent)}
+.kpi .v{font-size:28px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:12px;color:var(--muted)}
+.delta{font-size:11.5px;color:var(--muted)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th{text-align:left;font-weight:500;color:var(--muted);font-size:11px;letter-spacing:.04em;text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--surface)}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+tbody tr[data-act]{cursor:pointer}
+tbody tr[data-act]:hover td{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+tr.sel td{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+td.nw{white-space:nowrap}
+.badge{--c:var(--gray);display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap;color:var(--c);background:color-mix(in srgb,var(--c) 14%,transparent);border:1px solid color-mix(in srgb,var(--c) 32%,transparent)}
+.b-gray{--c:var(--gray)}.b-warn{--c:var(--warn)}.b-teal{--c:var(--teal)}.b-green{--c:var(--green)}.b-crit{--c:var(--crit)}.b-ai{--c:var(--ai)}.b-accent{--c:var(--accent)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--c);flex:none}
+.pulse{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--c) 55%,transparent)}50%{box-shadow:0 0 0 5px transparent}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;cursor:pointer;text-align:left;min-width:0}
+.card:hover{border-color:var(--accent)}
+.card.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.card .t{font-size:13px;line-height:1.4}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 12px;font-size:12px}
+.kv dt{color:var(--muted)}.kv dd{margin:0;word-break:break-word}
+.mini{display:flex;align-items:center;gap:8px}
+.mono-av{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:600;background:color-mix(in srgb,var(--ai) 22%,var(--surface2));color:var(--ai);flex:none}
+.tl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.tl li{display:grid;grid-template-columns:44px 14px minmax(0,1fr);gap:8px;padding:6px 0;font-size:12.5px}
+.tl .tm{color:var(--muted);font-family:var(--mono);font-size:11.5px}
+.tl .nd{width:9px;height:9px;border-radius:50%;background:var(--c);margin-top:5px}
+.tl li:not(:last-child) .nd{box-shadow:0 14px 0 -3px var(--line)}
+.alist{display:flex;flex-direction:column;gap:8px}
+.alert{display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);cursor:pointer;text-align:left;width:100%;font-size:12.5px}
+.alert:hover{border-color:var(--accent)}
+.filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.pill{padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface2);font-size:12px;cursor:pointer}
+.pill[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 20%,transparent);border-color:var(--accent)}
+.map{width:100%;height:auto;display:block}
+.map text{fill:var(--fg);font:12px var(--font)}
+.map .sub{fill:var(--muted);font-size:10.5px}
+.map .nodebox{fill:var(--surface);stroke:var(--line);stroke-width:1.2}
+.map g[data-act]{cursor:pointer}
+.map g[data-act]:hover .nodebox{stroke:var(--accent)}
+.map .selring{stroke:var(--accent);stroke-width:2}
+.flow{stroke-dasharray:6 6;animation:flow 1.2s linear infinite;fill:none;stroke-width:2}
+@keyframes flow{to{stroke-dashoffset:-12}}
+.diff{font-family:var(--mono);font-size:12px;border:1px solid var(--line);border-radius:10px;overflow-x:auto;background:var(--surface)}
+.diff div{display:grid;grid-template-columns:36px 36px minmax(max-content,1fr);white-space:pre}
+.diff .n{color:var(--muted);text-align:right;padding:0 6px;user-select:none}
+.diff .add{background:color-mix(in srgb,var(--green) 13%,transparent)}
+.diff .del{background:color-mix(in srgb,var(--crit) 13%,transparent)}
+.diff .hunk{color:var(--muted);background:var(--surface2)}
+.diff .x{padding-right:12px}
+.steps{display:flex;gap:4px;flex-wrap:wrap}
+.step{flex:1 1 70px;min-width:56px;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-size:11.5px;color:var(--muted);cursor:pointer;text-align:left}
+.step[aria-current="step"]{border-color:var(--accent);color:var(--fg);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.step.done{color:var(--fg)}
+.step.done::before{content:"✓ ";color:var(--teal)}
+.life{display:flex;gap:4px;flex-wrap:wrap}
+.life span{padding:3px 8px;border-radius:6px;font-size:11.5px;border:1px solid var(--line);color:var(--muted)}
+.life .on{color:var(--fg);border-color:var(--c,var(--accent));background:color-mix(in srgb,var(--c,var(--accent)) 16%,transparent)}
+.life .past{color:var(--fg)}
+.bar{height:6px;border-radius:99px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--teal);width:0}
+.bar.run i{animation:fill 1.8s ease-out forwards}
+@keyframes fill{to{width:100%}}
+.enter{animation:enter .45s ease both}
+@keyframes enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.tree{list-style:none;margin:0;padding-left:18px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.tree.root{border:0;padding:0}
+.node{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;cursor:pointer;font-size:12.5px}
+.node:hover{border-color:var(--accent)}
+.node.sel{border-color:var(--ai);box-shadow:0 0 0 1px var(--ai)}
+textarea,input[type=text]{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;resize:vertical}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+label.ck{display:flex;gap:8px;align-items:flex-start;font-size:13px}
+.pre{font-family:var(--mono);font-size:12px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.pre code{overflow-x:auto;white-space:pre;min-width:0}
+.modal{position:fixed;inset:0;background:rgba(5,8,16,.62);display:grid;place-items:center;padding:16px;z-index:50}
+.mbox{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;width:min(620px,100%);max-height:88vh;overflow:auto;display:flex;flex-direction:column;gap:12px;animation:enter .25s ease both}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 14px;border-radius:9px;font-size:13px;z-index:70;max-width:90vw}
+.tour{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));width:min(360px,calc(100vw - 32px));background:var(--surface2);border:1px solid var(--ai);border-radius:14px;padding:14px;z-index:40;display:flex;flex-direction:column;gap:8px;box-shadow:0 14px 40px rgba(0,0,0,.45)}
+.big{font-size:clamp(22px,4vw,32px);font-weight:600;letter-spacing:-.02em;line-height:1.15;text-wrap:balance}
+.callout{padding:10px 12px;border-radius:10px;font-size:12.5px;background:color-mix(in srgb,var(--c,var(--accent)) 10%,transparent);border:1px solid color-mix(in srgb,var(--c,var(--accent)) 30%,transparent)}
+details{border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:6px 10px}
+summary{cursor:pointer;font-size:12.5px}
+@media (prefers-reduced-motion:reduce){.pulse,.flow,.enter,.bar.run i,.mbox{animation:none}.bar.run i{width:100%}}
+</style>
+
+<div class="app" id="app">
+  <nav class="side" aria-label="Modules" id="side"></nav>
+  <div class="main">
+    <header class="top">
+      <span class="chip" title="Workspace"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18"/></svg>Northwind Payments</span>
+      <select id="repoSel" aria-label="Repository">
+        <option value="all">All repositories</option>
+        <option>payments-core</option><option>ledger-api</option><option>web-checkout</option>
+      </select>
+      <input id="q" class="search" type="text" placeholder="Search this view" aria-label="Search this view">
+      <span class="pop"><button class="chip" data-act="notif" aria-label="Notifications"><svg class="i" viewBox="0 0 24 24"><path d="M6 17V11a6 6 0 0 1 12 0v6l2 2H4zM10 21h4"/></svg><span id="ncount">4</span></button><div class="popbox" id="notif" hidden></div></span>
+      <button class="chip" data-act="nav" data-v="integrations" id="intStatus"></button>
+      <button class="btn primary" data-act="tour-start">Explore AgentBridge</button>
+      <span class="avatar" title="Maya Rahman, CTO">MR</span>
+    </header>
+    <div class="sim"><b>Simulated prototype.</b> All repositories, agents, results and integrations on this page are fictional example data. Nothing here connects to Foremerge, GPTree or a real codebase.</div>
+    <main id="view"></main>
+  </div>
+</div>
+<div id="modal" class="modal" hidden></div>
+<div id="tour" class="tour" hidden></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+/* ---------- data ---------- */
+const AGENTS=[
+{id:'AG-1',name:'Claude Code',model:'Claude Sonnet 5.5',repo:'payments-core',wt:'wt-stripe-replace',branch:'agent/claude/stripe-replace',task:'Replace PaymentService with a Stripe-specific implementation',status:'Intent Published',intent:'INT-0412',last:'2 min ago',cs:'CS-224'},
+{id:'AG-2',name:'Codex',model:'Codex CLI',repo:'payments-core',wt:'wt-paypal-extend',branch:'agent/codex/paypal-extend',task:'Add PayPal support by extending PaymentService',status:'Working',intent:'INT-0413',last:'just now',cs:'CS-223'},
+{id:'AG-3',name:'Cursor',model:'Cursor Agent',repo:'payments-core',wt:'wt-refund-tests',branch:'agent/cursor/refund-tests',task:'Raise refund-path test coverage',status:'Validation Running',intent:'INT-0414',last:'4 min ago',cs:'CS-222'},
+{id:'AG-4',name:'Claude Code',model:'Claude Sonnet 5.5',repo:'ledger-api',wt:'wt-settlement-ccy',branch:'agent/claude/settlement-currency',task:'Add settlement currency to ledger entries',status:'Awaiting Review',intent:'INT-0409',last:'26 min ago',cs:'CS-221'},
+{id:'AG-5',name:'Codex',model:'Codex CLI',repo:'web-checkout',wt:'wt-session-provider',branch:'agent/codex/session-provider',task:'Pass the payment provider in the checkout session payload',status:'Completed',intent:'INT-0415',last:'3 h ago',cs:'CS-218'},
+{id:'AG-6',name:'Cursor',model:'Cursor Agent',repo:'ledger-api',wt:'wt-batch-queue',branch:'agent/cursor/batch-queue',task:'Size the settlement batch queue',status:'Requires Attention',intent:'INT-0418',last:'3 h ago',cs:'—'},
+{id:'AG-7',name:'Codex',model:'Codex CLI',repo:'web-checkout',wt:'—',branch:'—',task:'Unassigned',status:'Idle',intent:'—',last:'1 day ago',cs:'—'}
+];
+const STATUS_C={'Idle':'gray','Planning':'accent','Intent Published':'ai','Working':'accent','Awaiting Review':'warn','Validation Running':'teal','Completed':'green','Requires Attention':'crit'};
+const LIVE=new Set(['Working','Validation Running','Planning','Intent Published']);
+const INTENTS=[
+{id:'INT-0412',agent:'AG-1',task:'Stripe-specific PaymentService',summary:'Replace PaymentService with StripePaymentService and remove the gateway-agnostic methods.',repo:'payments-core',cat:'Symbol',scope:'symbol:PaymentService',op:'replace',created:'Today 09:12',exp:'Today 17:12',status:'Claimed',rel:['INT-0413','INT-0416','INT-0419','INT-0414'],deps:'12 call sites in checkout, refunds and subscriptions'},
+{id:'INT-0413',agent:'AG-2',task:'PayPal through extension',summary:'Extend PaymentService with a PayPal provider through registerProvider().',repo:'payments-core',cat:'Symbol',scope:'symbol:PaymentService',op:'extend',created:'Today 09:15',exp:'Today 17:15',status:'Claimed',rel:['INT-0412','INT-0419'],deps:'Needs registerProvider() and the PaymentEvent v3 contract'},
+{id:'INT-0414',agent:'AG-3',task:'Refund-path coverage',summary:'Raise the coverage threshold for src/refunds to 85% and add tests against current PaymentService methods.',repo:'payments-core',cat:'Configuration',scope:'config:coverage.threshold',op:'modify',created:'Today 09:30',exp:'Today 17:30',status:'Claimed',rel:['INT-0412'],deps:'Tests call PaymentService.refund() directly'},
+{id:'INT-0416',agent:'AG-1',task:'Pin Stripe API version',summary:'Set STRIPE_API_VERSION in all deployment environments.',repo:'payments-core',cat:'Environment',scope:'env:STRIPE_API_VERSION',op:'set',created:'Today 09:12',exp:'Today 17:12',status:'Published',rel:['INT-0412'],deps:'Staging and production secrets'},
+{id:'INT-0419',agent:'AG-2',task:'PaymentEvent v3 provider field',summary:'Add an optional provider field to the PaymentEvent v3 contract.',repo:'payments-core',cat:'Contract',scope:'contract:PaymentEvent.v3',op:'extend',created:'Today 09:16',exp:'Today 17:16',status:'Published',rel:['INT-0412','INT-0413'],deps:'Ledger consumers read PaymentEvent v3'},
+{id:'INT-0409',agent:'AG-4',task:'settlement_currency column',summary:'Alter ledger.entries to add a nullable settlement_currency column.',repo:'ledger-api',cat:'Schema',scope:'schema:ledger.entries',op:'alter',created:'Yesterday 15:40',exp:'Today 15:40',status:'Claimed',rel:['INT-0410','INT-0415'],deps:'Reporting views read ledger.entries'},
+{id:'INT-0410',agent:'AG-4',task:'Backfill migration',summary:'Add migration 2026_11_add_settlement_currency with a batched backfill.',repo:'ledger-api',cat:'Migration',scope:'migration:2026_11_add_settlement_currency',op:'add',created:'Yesterday 15:41',exp:'Today 15:41',status:'Claimed',rel:['INT-0409','INT-0415'],deps:'Runs before checkout reads the new column'},
+{id:'INT-0415',agent:'AG-5',task:'Checkout session provider',summary:'Add provider to the POST /v2/checkout/session payload.',repo:'web-checkout',cat:'API',scope:'api:POST /v2/checkout/session',op:'modify',created:'Yesterday 11:02',exp:'Yesterday 19:02',status:'Fulfilled',rel:['INT-0409'],deps:'Reads settlement_currency once available'},
+{id:'INT-0418',agent:'AG-6',task:'Settlement batch queue',summary:'Add the settlement-batch queue with a sizing config.',repo:'ledger-api',cat:'Infrastructure',scope:'infra:queue/settlement-batch',op:'add',created:'Today 06:10',exp:'Today 12:10',status:'Stale claim',rel:['INT-0410'],deps:'Terraform module for queues'}
+];
+const CONFLICTS=[
+{id:'CF-101',a:'INT-0412',b:'INT-0413',repos:['payments-core'],scope:'symbol:PaymentService',type:'Destructive vs Additive',sev:'High',status:'New',
+ why:'Agent A declares it will replace PaymentService. Agent B declares it will extend the same symbol. If A removes the gateway-agnostic methods, the extension point B relies on may no longer exist.',
+ impact:'B\'s PayPal provider could be written against an API that A deletes, causing rework on both branches and a broken merge of 12 call sites.',
+ suggest:'Define a stable PaymentProvider interface first. Implement Stripe and PayPal as separate providers, then migrate callers in a controlled sequence.'},
+{id:'CF-102',a:'INT-0410',b:'INT-0415',repos:['ledger-api','web-checkout'],scope:'schema:ledger.entries',type:'Schema Dependency',sev:'Medium',status:'Acknowledged',
+ why:'The checkout session change reads settlement_currency, which the backfill migration has not yet introduced in production.',
+ impact:'Checkout could read a column that does not exist if the deploy order is wrong.',suggest:'Gate the checkout read behind the migration release and record the deploy order.'},
+{id:'CF-103',a:'INT-0412',b:'INT-0419',repos:['payments-core'],scope:'contract:PaymentEvent.v3',type:'Incompatible Interface Changes',sev:'Medium',status:'Revision requested',
+ why:'The Stripe rewrite changes event construction while the contract change adds a provider field to the same event.',
+ impact:'Downstream ledger consumers could receive events in two shapes during the transition.',suggest:'Land the contract change first and have the Stripe provider emit the new shape.'},
+{id:'CF-104',a:'INT-0414',b:'INT-0412',repos:['payments-core'],scope:'config:coverage.threshold',type:'Conflicting Assumptions',sev:'Low',status:'New',
+ why:'The coverage tests assume the current PaymentService.refund() signature that the replacement may remove.',
+ impact:'New tests may need rewriting after the replacement lands.',suggest:'Write refund tests against the provider interface once it is defined.'},
+{id:'CF-105',a:'INT-0410',b:'INT-0418',repos:['ledger-api'],scope:'infra:queue/settlement-batch',type:'Duplicate Work',sev:'Low',status:'Closed',
+ why:'Both intents size a batch process for settlement backfill.',impact:'Duplicated effort only.',suggest:'Keep one owner. Decision recorded: AG-4 owns batching.'}
+];
+const CS=[
+{id:'CS-221',agent:'AG-4',repo:'ledger-api',task:'Add settlement_currency',files:6,scopes:'schema:ledger.entries',ev:'independent',review:'Awaiting reviewer (26 h)',fp:'a41f9c2',stage:4,cmd:'pnpm test --filter ledger-api && pnpm lint',res:'142 passed, 0 failed',time:'38 s',by:'AgentBridge runner (simulated)',diff:'sql'},
+{id:'CS-222',agent:'AG-3',repo:'payments-core',task:'Refund-path tests',files:4,scopes:'config:coverage.threshold',ev:'agent',review:'Not ready',fp:'c7d02be',stage:3,cmd:'pnpm test src/refunds',res:'Agent reports 48 passed',time:'not run by AgentBridge',by:'Agent self-report',diff:'tests'},
+{id:'CS-223',agent:'AG-2',repo:'payments-core',task:'PayPal provider (draft)',files:9,scopes:'symbol:PaymentService, contract:PaymentEvent.v3',ev:'declared',review:'Blocked by CF-101',fp:'—',stage:2,cmd:'pnpm test --filter payments-core',res:'Not run',time:'—',by:'None',diff:'none'},
+{id:'CS-224',agent:'AG-1',repo:'payments-core',task:'Stripe provider implementation',files:11,scopes:'symbol:PaymentService, env:STRIPE_API_VERSION',ev:'stale',review:'Blocked by CF-101',fp:'f03c8d1',vfp:'e19b7a4',stage:3,cmd:'pnpm test --filter payments-core',res:'96 passed at e19b7a4',time:'51 s',by:'AgentBridge runner (simulated)',diff:'service'},
+{id:'CS-218',agent:'AG-5',repo:'web-checkout',task:'Session payload provider field',files:3,scopes:'api:POST /v2/checkout/session',ev:'independent',review:'Accepted',fp:'5d8a210',stage:6,hash:'b83e1f0',cmd:'pnpm test && pnpm e2e:smoke',res:'64 passed',time:'44 s',by:'AgentBridge runner (simulated)',diff:'none'}
+];
+const STAGES=['Intent','Claimed','In progress','Provisional changeset','Validated','Accepted','Committed'];
+const DIFFS={
+ sql:[['h','@@ migrations/2026_11_add_settlement_currency.sql'],['c',1,1,'BEGIN;'],['a','',2,'ALTER TABLE ledger.entries'],['a','',3,'  ADD COLUMN settlement_currency CHAR(3) NULL;'],['a','',4,'-- batched backfill, 5k rows per pass'],['a','',5,'UPDATE ledger.entries SET settlement_currency = currency'],['a','',6,'  WHERE settlement_currency IS NULL AND id BETWEEN :lo AND :hi;'],['c',2,7,'COMMIT;']],
+ service:[['h','@@ src/payments/PaymentService.ts'],['d',14,'','export class PaymentService {'],['d',15,'','  charge(order: Order): Promise<Receipt> {'],['a','',14,'export class StripePaymentService implements PaymentGateway {'],['a','',15,'  async charge(order: Order): Promise<Receipt> {'],['a','',16,'    return this.stripe.paymentIntents.confirm(order.intentId);'],['c',16,17,'  }'],['d',22,'','  registerProvider(p: Provider) { /* extension point */ }']],
+ tests:[['h','@@ src/refunds/refund.test.ts'],['c',8,8,"describe('refund', () => {"],['a','',9,"  it('refunds a partial amount', async () => {"],['a','',10,'    const r = await paymentService.refund(order, 1500);'],['a','',11,'    expect(r.status).toBe("succeeded");'],['a','',12,'  });'],['c',9,13,'});']]
+};
+const COMMENTS={'CS-221':[['Maya Rahman','Backfill batch size looks right. Please confirm the index exists before the UPDATE.']],'CS-224':[['Dev Patel','Validation ran against e19b7a4. The candidate changed afterwards, so I will wait for a re-run.']]};
+const EVENTS=[
+{t:'08:58',k:'start',ag:'AG-1',repo:'payments-core',tx:'Claude Code started a session in wt-stripe-replace'},
+{t:'09:12',k:'intent',ag:'AG-1',repo:'payments-core',tx:'Published INT-0412: replace symbol:PaymentService'},
+{t:'09:13',k:'claim',ag:'AG-1',repo:'payments-core',tx:'Claimed symbol:PaymentService'},
+{t:'09:15',k:'intent',ag:'AG-2',repo:'payments-core',tx:'Codex published INT-0413: extend symbol:PaymentService'},
+{t:'09:15',k:'conflict',ag:'AG-2',repo:'payments-core',tx:'Potential conflict CF-101 flagged (advisory, destructive vs additive)'},
+{t:'09:40',k:'changeset',ag:'AG-4',repo:'ledger-api',tx:'Provisional changeset CS-221 published'},
+{t:'09:42',k:'verify',ag:'AG-4',repo:'ledger-api',tx:'Independent verification passed for CS-221 (142 tests, 38 s)'},
+{t:'10:05',k:'changeset',ag:'AG-3',repo:'payments-core',tx:'CS-222 published. Agent reports 48 tests passing; not independently verified'},
+{t:'10:21',k:'verify',ag:'AG-1',repo:'payments-core',tx:'CS-224 candidate changed after validation; evidence marked stale'},
+{t:'10:30',k:'accept',ag:'AG-5',repo:'web-checkout',tx:'CS-218 accepted and committed (b83e1f0)'}
+];
+const EV_C={start:'gray',intent:'ai',claim:'accent',conflict:'crit',changeset:'warn',verify:'teal',accept:'green'};
+const TOOLS={'AG-1':['read_file src/payments/PaymentService.ts','grep "registerProvider" src/','write_file src/payments/StripePaymentService.ts','run pnpm test --filter payments-core'],'AG-2':['read_file src/payments/PaymentService.ts','write_file src/payments/PayPalProvider.ts','publish_intent INT-0419'],'AG-3':['read_file src/refunds/refund.ts','write_file src/refunds/refund.test.ts','run pnpm test src/refunds']};
+const DECISIONS=[
+{id:'DR-016',q:'Where do settlement currencies live?',alts:'Entries table, separate table',sel:'Entries table column',who:'Maya Rahman',ev:'CS-221, schema review',date:'Nov 14'},
+{id:'DR-017',q:'Who owns settlement batching?',alts:'AG-4, AG-6',sel:'AG-4',who:'Dev Patel',ev:'CF-105',date:'Nov 16'},
+{id:'DR-018',q:'How should PaymentService support more providers?',alts:'Replace, extend, provider interface',sel:'Provider interface (proposed)',who:'Maya Rahman',ev:'CF-101, branches A to C',date:'Nov 17',draft:true}
+];
+const CTX={
+ root:{t:'How should PaymentService evolve to support more providers?',st:'Decision open',model:'Claude Sonnet 5.5',task:'Payments roadmap Q1',links:['payments-core','CF-101','AG-1, AG-2']},
+ A:{t:'Branch A: Replace with a Stripe-only service',st:'Alternative · not selected',model:'Claude Sonnet 5.5',task:'INT-0412',links:['payments-core','AG-1','INT-0412','CS-224']},
+ B:{t:'Branch B: Extend PaymentService in place',st:'Alternative · not selected',model:'Codex CLI',task:'INT-0413',links:['payments-core','AG-2','INT-0413','CS-223']},
+ C:{t:'Branch C: Introduce a PaymentProvider interface',st:'Proposed selection',model:'Claude Sonnet 5.5',task:'DR-018',links:['payments-core','CF-101','DR-018','API design doc']},
+ C1:{t:'C.1 Caller migration plan',st:'Open',model:'Claude Sonnet 5.5',task:'12 call sites',links:['payments-core','INT-0412']},
+ C2:{t:'C.2 Risk: webhook ordering differs by provider',st:'Open risk',model:'Codex CLI',task:'Webhook handlers',links:['payments-core','INT-0419']}
+};
+const FINDINGS=[
+{id:'F1',b:'A',t:'Smallest surface area; removes legacy gateway code.'},{id:'F2',b:'A',t:'Breaks 12 call sites in one step.'},
+{id:'F3',b:'B',t:'No caller breakage in the short term.'},{id:'F4',b:'B',t:'Provider logic accumulates inside one class.'},
+{id:'F5',b:'C',t:'A stable contract lets providers ship independently.'},{id:'F6',b:'C',t:'Needs a controlled caller migration.'},{id:'F7',b:'C',t:'Webhook ordering differs between Stripe and PayPal.'}
+];
+const COMPARE=[
+['Proposed solution','Replace PaymentService with a Stripe-only class','Extend PaymentService with provider hooks','Add PaymentProvider; providers implement it'],
+['Advantages','Simple; removes legacy code','No immediate caller change','Providers evolve independently'],
+['Trade-offs','Locks in one provider','Class grows; hidden coupling','More upfront design'],
+['Dependencies','12 call sites','registerProvider(), PaymentEvent v3','Migration plan for callers'],
+['Risks','PayPal work blocked','Hooks removed by later rewrite','Transition period with two APIs'],
+['Supporting references','CS-224','CS-223','DR-018 draft, CF-101']
+];
+const TECH=[
+{t:'Two agents declared incompatible changes against the PaymentService extension point.',b:'Two parallel development tasks may interfere with each other. The team is reviewing the design before implementation continues.'},
+{t:'CS-224 validation evidence is stale after the candidate fingerprint changed.',b:'One piece of finished work changed after it was tested, so it needs to be tested again before it can be approved.'},
+{t:'INT-0418 claim has had no heartbeat for 3 hours.',b:'A task claimed three hours ago has shown no activity. The team will check whether it is still in progress.'},
+{t:'CS-221 schema migration passed independent verification and awaits reviewer approval.',b:'A database change has been tested separately and is waiting for a person to approve it.'},
+{t:'CS-218 was accepted and committed to main.',b:'The checkout update that passes the payment provider through to the ledger is complete and released.'}
+];
+const GLOSS={'extension point':'a place where new behavior can be added','fingerprint':'an ID of the exact code version that was tested','candidate':'the version of the code under review','claim':'a reservation on part of the code','heartbeat':'a regular sign of life from an agent','schema':'the structure of a database','migration':'a scripted database change','changeset':'a bundle of code changes','intent':'what an agent says it plans to change','validation':'an independent check that the code works','independent':'run by AgentBridge, not reported by the agent'};
+const INTEGRATIONS=[
+{n:'Foremerge',d:'Agent intent coordination and conflict awareness.',s:'Proposed touchpoint',sync:'Never',caps:['Read published intents','Receive conflict findings']},
+{n:'GPTree',d:'Branching, comparing and merging AI conversations.',s:'Proposed touchpoint',sync:'Never',caps:['Link conversation branches','Attach decision records']},
+{n:'Claude Code',d:'Terminal coding agent.',s:'Simulated connection',sync:'2 min ago',caps:['Session activity','Worktree status','Changeset events']},
+{n:'Codex',d:'Coding agent client.',s:'Simulated connection',sync:'just now',caps:['Session activity','Worktree status']},
+{n:'Cursor',d:'IDE-based coding agent.',s:'Simulated connection',sync:'4 min ago',caps:['Session activity','Test run reports']},
+{n:'GitHub',d:'Repositories, branches and pull requests.',s:'Simulated connection',sync:'1 min ago',caps:['Branches and worktrees','Commit references','PR status']},
+{n:'GitLab',d:'Repositories and merge requests.',s:'Not configured',sync:'Never',caps:['Branches','Merge requests']},
+{n:'Linear',d:'Issues and project planning.',s:'Proposed touchpoint',sync:'Never',caps:['Link tasks to intents']},
+{n:'Jira',d:'Issue tracking.',s:'Not configured',sync:'Never',caps:['Link tasks to intents']},
+{n:'CI/CD',d:'Verification runs and build status.',s:'Simulated connection',sync:'6 min ago',caps:['Run configured verification','Report fingerprints']},
+{n:'MCP tools',d:'Any MCP-compatible tool server.',s:'Proposed touchpoint',sync:'Never',caps:['Expose registry as tools']}
+];
+const INT_C={'Simulated connection':'teal','Proposed touchpoint':'ai','Not configured':'gray'};
+
+/* ---------- state & helpers ---------- */
+const S={view:'overview',repo:'all',q:'',agent:'AG-1',intent:'INT-0412',conflict:'CF-101',cs:'CS-221',fleetStatus:'all',fleetModel:'all',intentCat:'all',sevF:'all',csF:'all',period:7,commsMode:'e2b',techSel:0,ctxNode:'C',pick:{},reviewed:false,collapsed:false,log:{},repoSel:'payments-core',gen:{},
+ D:{step:0,recorded:false,verified:false,approved:false},tour:-1,summaryOut:'',briefOut:null,reqText:'Customers in Germany ask for PayPal at checkout. We want it live before the holiday sales window.'};
+const W={name:'Northwind Payments',region:'EU',host:'GitHub',repo:'payments-core',a_claude:true,a_codex:true,a_cursor:true,p_foremerge:true,p_gptree:true,p_linear:false,p_jira:false,perm:'Agents publish; humans accept',human:true,cmd:'pnpm test && pnpm lint',indep:true,stale:true,invites:'maya@example.com, dev@example.com',step:0};
+const $=(s,r=document)=>r.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const B=(t,c,p)=>`<span class="badge b-${c}">${p?'<i class="dot pulse"></i>':''}${esc(t)}</span>`;
+const ag=id=>AGENTS.find(a=>a.id===id);
+const it=id=>INTENTS.find(i=>i.id===id);
+const cf=id=>CONFLICTS.find(c=>c.id===id);
+const cs=id=>CS.find(c=>c.id===id);
+const inRepo=r=>S.repo==='all'||r===S.repo;
+const hit=o=>!S.q||JSON.stringify(o).toLowerCase().includes(S.q.toLowerCase());
+const agLabel=id=>{const a=ag(id);return a?`${esc(a.name)} <span class="muted mono">${a.id}</span>`:'—'};
+const icons={overview:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+fleet:'<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 1v4M15 1v4M9 19v4M15 19v4M1 9h4M1 15h4M19 9h4M19 15h4"/>',
+intents:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>',
+conflicts:'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>',
+repos:'<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 5-12 3-12 7"/>',
+changesets:'<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
+context:'<circle cx="6" cy="12" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 12h4l4-5M12 12l4 5"/>',
+comms:'<path d="M4 5h16v11H9l-5 4z"/>',
+integrations:'<path d="M9 3v5M15 3v5M6 8h12v4a6 6 0 0 1-12 0zM12 18v3"/>',
+demo:'<circle cx="12" cy="12" r="9"/><path d="M10 8l6 4-6 4z"/>'};
+const ico=n=>`<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${icons[n]||''}</svg>`;
+const NAV=[['overview','Command Center'],['fleet','Agent Fleet'],['intents','Intent Registry'],['conflicts','Conflict Intelligence'],['repos','Repositories'],['changesets','Changesets'],['context','Context & Decisions'],['comms','Communication'],['integrations','Integrations'],['demo','Agent Coordination Challenge']];
+let toastT;
+function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2600)}
+function copy(t){try{navigator.clipboard.writeText(t).then(()=>toast('Copied'),()=>toast('Copy was blocked. Select the text and copy it manually.'))}catch(e){toast('Copy was blocked. Select the text and copy it manually.')}}
+function spark(a,c){const w=100,h=28,mx=Math.max(...a),mn=Math.min(...a),r=mx-mn||1;const p=a.map((v,i)=>[i*w/(a.length-1),h-3-(v-mn)/r*(h-6)]);const l=p.map(x=>x.join(',')).join(' ');return `<svg viewBox="0 0 100 28" width="100%" height="28" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,28 ${l} 100,28" fill="${c}" opacity=".14"/><polyline points="${l}" fill="none" stroke="${c}" stroke-width="1.6"/><circle cx="${p[p.length-1][0]}" cy="${p[p.length-1][1]}" r="2.4" fill="${c}"/></svg>`}
+function intentConf(id){return CONFLICTS.filter(c=>c.status!=='Closed'&&(c.a===id||c.b===id))}
+function evBadge(c){
+ if(c.stage>=6)return B('Committed '+c.hash,'green');
+ if(c.stage===5)return B('Accepted','green');
+ const m={declared:['Declared only','gray'],agent:['Agent-reported · not verified','warn'],independent:['Independently validated','teal'],stale:['Evidence stale','crit']};
+ if(c.ev==='running')return B('Verification running','teal',1);
+ return B(...m[c.ev]);
+}
+
+/* ---------- shared pieces ---------- */
+function agentCard(a,sel){
+ return `<div class="card ${sel?'sel':''}" tabindex="0" role="button" data-act="pick-agent" data-id="${a.id}">
+ <div class="ph"><div class="mini"><span class="mono-av">${a.name[0]}</span><div><b>${esc(a.name)}</b> <span class="muted mono">${a.id}</span><div class="small muted">${esc(a.model)}</div></div></div>${B(a.status,STATUS_C[a.status],LIVE.has(a.status))}</div>
+ <div class="t">${esc(a.task)}</div>
+ <dl class="kv"><dt>Repo</dt><dd class="mono">${a.repo}</dd><dt>Worktree</dt><dd class="mono">${a.wt}</dd><dt>Intent</dt><dd class="mono">${a.intent}</dd><dt>Changeset</dt><dd class="mono">${a.cs}</dd><dt>Last activity</dt><dd>${a.last}</dd></dl></div>`;
+}
+function intentTable(list,full){
+ const rows=list.map(i=>{const c=intentConf(i.id);return `<tr data-act="pick-intent" data-id="${i.id}" class="${S.intent===i.id?'sel':''}"><td class="mono nw">${i.id}</td><td class="nw">${agLabel(i.agent)}</td><td>${esc(i.task)}</td>${full?`<td>${esc(i.summary)}</td>`:''}<td class="mono">${esc(i.scope)}</td><td>${B(i.op,i.op==='replace'?'crit':i.op==='extend'?'warn':'gray')}</td><td class="mono">${i.repo}</td>${full?`<td class="nw">${i.created}</td><td class="nw">${i.exp}</td><td>${B(i.status,i.status==='Stale claim'?'warn':i.status==='Fulfilled'?'green':'accent')}</td>`:''}<td>${c.length?B('Potential conflict · advisory','warn'):B('No findings','gray')}</td></tr>`}).join('');
+ return `<div class="tw"><table><thead><tr><th>Intent</th><th>Agent</th><th>Task</th>${full?'<th>Summary</th>':''}<th>Semantic scope</th><th>Operation</th><th>Repository</th>${full?'<th>Created</th><th>Expires</th><th>Status</th>':''}<th>Conflicts</th></tr></thead><tbody>${rows||'<tr><td colspan="12" class="muted">No intents match the current repository and search filters.</td></tr>'}</tbody></table></div>`;
+}
+function pairMap(c){
+ const A=it(c.a),Bn=it(c.b);
+ return `<svg class="map" viewBox="0 0 600 150" role="img" aria-label="${A.id} and ${Bn.id} both declare changes to ${esc(c.scope)}">
+ <rect class="nodebox" x="6" y="30" width="170" height="64" rx="10"/><text x="18" y="52">${A.id} · ${esc(A.op)}</text><text class="sub" x="18" y="72">${esc(ag(A.agent).name)} · ${ag(A.agent).id}</text>
+ <rect class="nodebox" x="424" y="30" width="170" height="64" rx="10"/><text x="436" y="52">${Bn.id} · ${esc(Bn.op)}</text><text class="sub" x="436" y="72">${esc(ag(Bn.agent).name)} · ${ag(Bn.agent).id}</text>
+ <path class="flow" d="M176 62 H252" stroke="var(--crit)"/><path class="flow" d="M424 62 H348" stroke="var(--warn)"/>
+ <rect x="252" y="40" width="96" height="44" rx="22" fill="color-mix(in srgb,var(--ai) 18%,var(--surface))" stroke="var(--ai)"/><text x="300" y="60" text-anchor="middle" style="font-size:10.5px">shared scope</text><text x="300" y="75" text-anchor="middle" class="sub">${esc(c.scope.length>16?c.scope.slice(0,15)+'…':c.scope)}</text>
+ <text class="sub" x="300" y="120" text-anchor="middle">Advisory finding from declared scopes and operations. File overlap alone is not used.</text></svg>`;
+}
+function lifeChips(stage,ev){const c=ev==='stale'?'var(--crit)':ev==='agent'?'var(--warn)':stage>=5?'var(--green)':stage===4?'var(--teal)':'var(--gray)';return `<div class="life" style="--c:${c}">${STAGES.map((s,i)=>`<span class="${i===stage?'on':i<stage?'past':''}">${s}</span>`).join('')}</div>`}
+function head(t,p,extra){return `<div class="head"><div><h1>${t}</h1><p>${p}</p></div>${extra||''}</div>`}
+
+/* ---------- views ---------- */
+const V={};
+V.overview=()=>{
+ const A=AGENTS.filter(a=>inRepo(a.repo)),I=INTENTS.filter(i=>inRepo(i.repo)),C=CONFLICTS.filter(c=>c.status!=='Closed'&&c.repos.some(inRepo)),K=CS.filter(c=>inRepo(c.repo));
+ const p7=S.period===7;
+ const kp=[
+ ['Active coding agents',A.filter(a=>LIVE.has(a.status)||a.status==='Awaiting Review').length,p7?'+1 vs last 7 days':'+2 vs last 30 days',[3,3,4,4,5,4,5,5],'var(--accent)','fleet'],
+ ['Active repositories',new Set(A.filter(a=>a.status!=='Idle').map(a=>a.repo)).size,'No change',[3,3,3,3,3,3,3,3],'var(--accent)','repos'],
+ ['Published intents',I.length,p7?'+3 vs last 7 days':'+9 vs last 30 days',[4,5,5,6,7,7,8,9],'var(--ai)','intents'],
+ ['Potential conflicts',C.length,p7?'+2 vs last 7 days':'+1 vs last 30 days',[1,1,2,2,2,3,4,4],'var(--crit)','conflicts'],
+ ['Changesets awaiting review',K.filter(c=>c.stage<5&&c.ev!=='declared').length,p7?'+1 vs last 7 days':'−1 vs last 30 days',[2,3,2,3,3,2,3,3],'var(--warn)','changesets'],
+ ['Independently verified',K.filter(c=>c.ev==='independent').length,p7?'+1 vs last 7 days':'+4 vs last 30 days',[0,1,1,1,2,2,2,2],'var(--teal)','changesets']];
+ const att=[
+ ['crit','Potential scope collision: CF-101 on symbol:PaymentService (advisory).','conflicts','conflict','CF-101'],
+ ['warn','Stale claim: INT-0418 has had no activity for 3 hours.','intents','intent','INT-0418'],
+ ['warn','Missing verification: CS-222 only has agent-reported test results.','changesets','cs','CS-222'],
+ ['crit','Stale evidence: CS-224 changed after it was validated.','changesets','cs','CS-224'],
+ ['warn','Overdue review: CS-221 has waited 26 hours for a reviewer.','changesets','cs','CS-221']];
+ return head('Engineering Command Center','Every coding agent, intent, potential conflict and changeset across your repositories, in one view.',
+ `<div class="chips" role="group" aria-label="Reporting period"><button class="pill" aria-pressed="${p7}" data-act="period" data-v="7">Last 7 days</button><button class="pill" aria-pressed="${!p7}" data-act="period" data-v="30">Last 30 days</button></div>`)+
+ `<div class="kpis">${kp.map(k=>`<button class="kpi" data-act="nav" data-v="${k[5]}"><span class="l">${k[0]}</span><span class="v" data-count="${k[1]}">${k[1]}</span>${spark(k[3],k[4])}<span class="delta">${k[2]}</span></button>`).join('')}</div>
+ <div class="cols"><section class="panel"><div class="ph"><h2>Active agents</h2><button class="btn sm" data-act="nav" data-v="fleet">Open fleet</button></div><div class="grid">${A.filter(a=>a.status!=='Idle').slice(0,4).map(a=>agentCard(a,false)).join('')||'<p class="muted">No agents in this repository.</p>'}</div></section>
+ <section class="panel"><h2>Attention required</h2><div class="alist">${att.filter(a=>hit(a)).map(a=>`<button class="alert" data-act="jump" data-v="${a[2]}" data-k="${a[3]}" data-id="${a[4]}">${B(a[0]==='crit'?'Review':'Check',a[0])}<span>${esc(a[1])}</span></button>`).join('')}</div></section></div>
+ <section class="panel"><div class="ph"><h2>Intent overview</h2><button class="btn sm" data-act="nav" data-v="intents">Open registry</button></div>${intentTable(I.filter(hit).slice(0,6),false)}</section>
+ <div class="cols even"><section class="panel"><h2>Engineering activity</h2><ul class="tl">${EVENTS.filter(e=>inRepo(e.repo)).slice().reverse().slice(0,8).map(e=>`<li style="--c:var(--${EV_C[e.k]})"><span class="tm">${e.t}</span><i class="nd"></i><span>${esc(e.tx)}</span></li>`).join('')}</ul></section>
+ <section class="panel"><div class="ph"><h2>AI engineering insights</h2>${B('Simulated','ai')}</div><div class="alist">
+ <div class="callout" style="--c:var(--ai)">Three of five open intents touch payments-core. Parallel work there is the most likely source of rework this week.</div>
+ <div class="callout" style="--c:var(--accent)">CS-221 has the strongest evidence of any open changeset. It has waited longest for review.</div>
+ <div class="callout" style="--c:var(--warn)">CS-224 will need re-validation before it can be accepted, whatever the CF-101 outcome.</div>
+ <p class="small muted">Insights are examples. They support, and never replace, code review, CI and engineering judgment.</p></div></section></div>`;
+};
+
+V.fleet=()=>{
+ const models=[...new Set(AGENTS.map(a=>a.model))];
+ const L=AGENTS.filter(a=>inRepo(a.repo)&&(S.fleetStatus==='all'||a.status===S.fleetStatus)&&(S.fleetModel==='all'||a.model===S.fleetModel)&&hit(a));
+ const a=ag(S.agent)||AGENTS[0];
+ const ev=EVENTS.filter(e=>e.ag===a.id).slice().reverse();
+ const i=it(a.intent),k=cs(a.cs);
+ const det=`<section class="panel enter" key="${a.id}"><div class="ph"><h2>${esc(a.name)} <span class="muted mono">${a.id}</span></h2>${B(a.status,STATUS_C[a.status],LIVE.has(a.status))}</div>
+ <p class="small muted">${esc(a.task)}</p><h3 style="margin-top:12px">Current intent</h3>${i?`<p class="small"><span class="mono">${i.id}</span> · ${esc(i.summary)}</p><p class="small">Scope <span class="mono">${esc(i.scope)}</span> ${B(i.op,'gray')} ${B('Declared, not yet implemented','gray')}</p><p class="small muted">Related: ${i.rel.map(r=>`<button class="pill" data-act="jump" data-v="intents" data-k="intent" data-id="${r}">${r}</button>`).join(' ')}</p><p class="small muted">Dependencies: ${esc(i.deps)}</p>`:'<p class="small muted">No published intent.</p>'}
+ <h3 style="margin-top:12px">Recent tool activity</h3><ul class="small mono" style="margin:6px 0;padding-left:18px">${(TOOLS[a.id]||['No tool activity in this session']).map(t=>`<li>${esc(t)}</li>`).join('')}</ul>
+ <h3 style="margin-top:12px">Changeset and validation</h3>${k?`<p class="small"><button class="pill" data-act="jump" data-v="changesets" data-k="cs" data-id="${k.id}">${k.id}</button> ${evBadge(k)}</p>`:'<p class="small muted">No changeset yet.</p>'}
+ <h3 style="margin-top:12px">Activity history</h3><ul class="tl">${ev.map(e=>`<li style="--c:var(--${EV_C[e.k]})"><span class="tm">${e.t}</span><i class="nd"></i><span>${esc(e.tx)}</span></li>`).join('')||'<li><span></span><span></span><span class="muted">No events today.</span></li>'}</ul></section>`;
+ return head('Agent Fleet','Understand what every AI coding agent is doing across your development environment.')+
+ `<div class="filters"><label class="small muted">Status <select data-f="fleetStatus"><option value="all">All</option>${Object.keys(STATUS_C).map(s=>`<option ${S.fleetStatus===s?'selected':''}>${s}</option>`).join('')}</select></label>
+ <label class="small muted">Model <select data-f="fleetModel"><option value="all">All</option>${models.map(m=>`<option ${S.fleetModel===m?'selected':''}>${esc(m)}</option>`).join('')}</select></label></div>
+ <div class="cols"><div class="grid">${L.map(x=>agentCard(x,x.id===a.id)).join('')||'<p class="muted">No agents match these filters.</p>'}</div>${det}</div>
+ <section class="panel"><h2>Agent activity stream</h2><ul class="tl">${EVENTS.filter(e=>inRepo(e.repo)).slice().reverse().map(e=>`<li style="--c:var(--${EV_C[e.k]})"><span class="tm">${e.t}</span><i class="nd"></i><span><b>${esc(ag(e.ag).name)}</b> <span class="muted mono">${e.ag}</span> · ${esc(e.tx)}</span></li>`).join('')}</ul></section>`;
+};
+
+V.intents=()=>{
+ const cats=['all','Symbol','API','Schema','Migration','Contract','Environment','Configuration','Infrastructure'];
+ const L=INTENTS.filter(i=>inRepo(i.repo)&&(S.intentCat==='all'||i.cat===S.intentCat)&&hit(i));
+ const i=it(S.intent)||INTENTS[0];
+ const node=(id,x,y,lab,sub)=>`<g data-act="pick-intent" data-id="${id}" tabindex="0"><rect class="nodebox" x="${x}" y="${y}" width="150" height="46" rx="9"/>${S.intent===id?`<rect class="selring" x="${x}" y="${y}" width="150" height="46" rx="9" fill="none"/>`:''}<text x="${x+10}" y="${y+19}">${id} · ${lab}</text><text class="sub" x="${x+10}" y="${y+35}">${sub}</text></g>`;
+ const map=`<svg class="map" viewBox="0 0 640 290" role="img" aria-label="Scope map for symbol:PaymentService">
+ <path class="flow" d="M160 85 L270 130" stroke="var(--crit)"/><path class="flow" d="M160 215 L270 170" stroke="var(--warn)"/><path class="flow" d="M480 85 L370 130" stroke="var(--gray)"/><path class="flow" d="M480 215 L370 170" stroke="var(--gray)"/>
+ <path d="M85 108 V192" stroke="var(--crit)" stroke-width="2" stroke-dasharray="3 4" fill="none"/><text x="96" y="154" style="fill:var(--crit);font-size:10.5px">potentially incompatible</text>
+ <rect x="265" y="125" width="110" height="50" rx="25" fill="color-mix(in srgb,var(--ai) 18%,var(--surface))" stroke="var(--ai)"/><text x="320" y="146" text-anchor="middle">PaymentService</text><text x="320" y="161" text-anchor="middle" class="sub">symbol</text>
+ ${node('INT-0412',10,40,'replace','Agent A · Claude Code')}${node('INT-0413',10,192,'extend','Agent B · Codex')}${node('INT-0419',480,40,'extend','contract:PaymentEvent.v3')}${node('INT-0414',480,192,'modify','config:coverage.threshold')}
+ <text class="sub" x="320" y="275" text-anchor="middle">Click a node to inspect its intent. Relationships come from declared scopes and operations.</text></svg>`;
+ return head('Intent Registry','See what each coding agent intends to change before implementation begins. All entries are advisory planning data.')+
+ `<div class="chips" role="group" aria-label="Scope category">${cats.map(c=>`<button class="pill" aria-pressed="${S.intentCat===c}" data-act="chip" data-k="intentCat" data-v="${c}">${c==='all'?'All scopes':c}</button>`).join('')}</div>
+ <section class="panel">${intentTable(L,true)}</section>
+ <div class="cols"><section class="panel enter" key="${i.id}"><div class="ph"><h2>${i.id} · ${esc(i.task)}</h2>${B(i.status,i.status==='Stale claim'?'warn':'accent')}</div>
+ <p class="small">${esc(i.summary)}</p><dl class="kv" style="margin-top:10px"><dt>Agent</dt><dd>${agLabel(i.agent)}</dd><dt>Scope</dt><dd class="mono">${esc(i.scope)}</dd><dt>Operation</dt><dd>${esc(i.op)}</dd><dt>Category</dt><dd>${i.cat}</dd><dt>Dependencies</dt><dd>${esc(i.deps)}</dd><dt>Related intents</dt><dd>${i.rel.map(r=>`<button class="pill" data-act="pick-intent" data-id="${r}">${r}</button>`).join(' ')}</dd><dt>Claim</dt><dd>${i.status==='Stale claim'?'Stale. No activity for 3 hours.':i.status==='Fulfilled'?'Released after acceptance.':'Active until '+i.exp}</dd></dl>
+ ${intentConf(i.id).map(c=>`<div class="callout" style="--c:var(--warn);margin-top:10px"><b>${c.id} · ${c.type}</b> (heuristic, advisory)<br>${esc(c.why)} <button class="pill" data-act="jump" data-v="conflicts" data-k="conflict" data-id="${c.id}">Open finding</button></div>`).join('')}</section>
+ <section class="panel"><div class="ph"><h2>Scope map</h2>${B('Advisory','warn')}</div>${map}</section></div>`;
+};
+
+V.conflicts=()=>{
+ const L=CONFLICTS.filter(c=>c.repos.some(inRepo)&&(S.sevF==='all'||c.sev===S.sevF)&&hit(c));
+ const c=cf(S.conflict)||CONFLICTS[0],A=it(c.a),Bn=it(c.b);
+ const open=CONFLICTS.filter(x=>x.status!=='Closed');
+ const LC=['New','Acknowledged','Revision requested','Decision recorded','Closed'];
+ const idx=LC.indexOf(c.status);
+ const logs=(S.log[c.id]||[]).map(l=>`<li><span class="tm">${l[0]}</span><i class="nd" style="--c:var(--accent)"></i><span>${esc(l[1])}</span></li>`).join('');
+ return head('Conflict Intelligence','Understand potential incompatibilities between agent plans before implementation creates downstream problems. Findings are heuristic and advisory; a person decides what they mean.')+
+ `<div class="kpis"><div class="kpi" style="cursor:default"><span class="l">Potential conflicts</span><span class="v">${open.length}</span></div><div class="kpi" style="cursor:default"><span class="l">High priority</span><span class="v">${open.filter(x=>x.sev==='High').length}</span></div><div class="kpi" style="cursor:default"><span class="l">Shared semantic scopes</span><span class="v">${new Set(open.map(x=>x.scope)).size}</span></div><div class="kpi" style="cursor:default"><span class="l">Dependency collisions</span><span class="v">${open.filter(x=>/Dependency/.test(x.type)).length}</span></div><div class="kpi" style="cursor:default"><span class="l">Awaiting review</span><span class="v">${open.filter(x=>['New','Acknowledged'].includes(x.status)).length}</span></div></div>
+ <div class="filters"><label class="small muted">Severity <select data-f="sevF"><option value="all">All</option>${['High','Medium','Low'].map(s=>`<option ${S.sevF===s?'selected':''}>${s}</option>`).join('')}</select></label></div>
+ <section class="panel"><div class="tw"><table><thead><tr><th>Finding</th><th>Agent A</th><th>Agent B</th><th>Intents</th><th>Scope</th><th>Type</th><th>Severity</th><th>Review</th></tr></thead><tbody>${L.map(x=>`<tr data-act="pick-conf" data-id="${x.id}" class="${x.id===c.id?'sel':''}"><td class="mono nw">${x.id}</td><td>${agLabel(it(x.a).agent)}</td><td>${agLabel(it(x.b).agent)}</td><td class="mono nw">${x.a} / ${x.b}</td><td class="mono">${esc(x.scope)}</td><td>${x.type}</td><td>${B(x.sev,x.sev==='High'?'crit':x.sev==='Medium'?'warn':'gray')}</td><td>${B(x.status,x.status==='Closed'?'green':x.status==='Decision recorded'?'teal':'accent')}</td></tr>`).join('')||'<tr><td colspan="8" class="muted">No findings match these filters.</td></tr>'}</tbody></table></div></section>
+ <section class="panel enter" key="${c.id}${c.status}"><div class="ph"><h2>${c.id} · ${c.type}</h2><div class="row">${B('Heuristic · advisory, not a confirmed defect','warn')}</div></div>
+ ${pairMap(c)}
+ <div class="cols even" style="margin-top:10px"><div class="callout" style="--c:var(--crit)"><b>Agent A · ${A.id}</b><br>${esc(A.summary)}<br><span class="mono small">${esc(A.scope)} = ${A.op}</span></div><div class="callout" style="--c:var(--warn)"><b>Agent B · ${Bn.id}</b><br>${esc(Bn.summary)}<br><span class="mono small">${esc(Bn.scope)} = ${Bn.op}</span></div></div>
+ <dl class="kv" style="margin-top:12px"><dt>Why flagged</dt><dd>${esc(c.why)}</dd><dt>Possible impact</dt><dd>${esc(c.impact)}</dd><dt>Suggested coordination</dt><dd>${esc(c.suggest)}</dd></dl>
+ <h3 style="margin-top:14px">Status lifecycle</h3><div class="life">${LC.map((s,i)=>`<span class="${i===idx?'on':i<idx?'past':''}">${s}</span>`).join('')}</div>
+ <h3 style="margin-top:14px">Resolution workspace</h3><div class="row">${[['ack','Acknowledge'],['revise','Request revised intent'],['iface','Propose shared interface'],['reassign','Reassign task'],['split','Split scope'],['decide','Record decision'],['close','Close finding']].map(b=>`<button class="btn sm" data-act="conf-act" data-a="${b[0]}" ${c.status==='Closed'||(b[0]==='close'&&c.status!=='Decision recorded')?'disabled':''}>${b[1]}</button>`).join('')}</div>
+ ${logs?`<ul class="tl" style="margin-top:10px">${logs}</ul>`:''}</section>`;
+};
+
+V.repos=()=>{
+ const R=[['payments-core','main',3,3,'2 min ago','Simulated'],['ledger-api','main',2,2,'26 min ago','Simulated'],['web-checkout','main',1,2,'3 h ago','Simulated']].filter(r=>inRepo(r[0]));
+ const r=S.repoSel;
+ const W3=AGENTS.filter(a=>a.repo===r&&a.wt!=='—');
+ const sv=(()=>{const h=40+W3.length*58;let s=`<svg class="map" viewBox="0 0 640 ${h}" role="img" aria-label="Worktrees branching from main in ${r}"><line x1="20" y1="22" x2="620" y2="22" stroke="var(--accent)" stroke-width="2"/><text x="20" y="14" class="sub">main</text>`;
+ W3.forEach((a,i)=>{const y=62+i*58,x=90+i*60;s+=`<path d="M${x} 22 C${x+20} 22 ${x+10} ${y} ${x+40} ${y} H600" fill="none" class="flow" stroke="var(--${STATUS_C[a.status]})"/><g data-act="pick-agent-nav" data-id="${a.id}" tabindex="0"><circle cx="${x+40}" cy="${y}" r="6" fill="var(--${STATUS_C[a.status]})"/><text x="${x+52}" y="${y-10}">${a.wt} · ${esc(a.name)}</text><text class="sub" x="${x+52}" y="${y+16}">${a.branch} · ${esc(a.task.slice(0,48))}</text></g>`});
+ return s+'</svg>'})();
+ return head('Repositories & Worktrees','See how multiple agents work in isolated worktrees across your repositories.')+
+ `<div class="grid">${R.map(x=>`<div class="card ${x[0]===r?'sel':''}" tabindex="0" role="button" data-act="pick-repo" data-id="${x[0]}"><b class="mono">${x[0]}</b><dl class="kv"><dt>Main branch</dt><dd class="mono">${x[1]}</dd><dt>Active worktrees</dt><dd>${x[2]}</dd><dt>Connected agents</dt><dd>${x[3]}</dd><dt>Last activity</dt><dd>${x[4]}</dd><dt>Integration</dt><dd>${B('Simulated','teal')}</dd></dl></div>`).join('')}</div>
+ <div class="cols"><section class="panel"><h2>Worktrees in <span class="mono">${r}</span></h2>${sv}</section>
+ <section class="panel"><h2>Repository detail</h2><dl class="kv"><dt>Repository</dt><dd class="mono">${r}</dd><dt>Agents</dt><dd>${W3.map(a=>a.name+' '+a.id).join(', ')||'None'}</dd><dt>Decisions</dt><dd>${DECISIONS.length} recorded in this prototype</dd></dl>
+ <h3 style="margin-top:12px">Worktree status</h3><div class="alist">${W3.map(a=>{const k=cs(a.cs);return `<div class="callout" style="--c:var(--${STATUS_C[a.status]})"><b class="mono">${a.wt}</b> ${B(a.status,STATUS_C[a.status],LIVE.has(a.status))}<br><span class="small">${esc(a.task)}</span><br><span class="small muted">Intent ${a.intent} · ${k?evBadge(k).replace(/class="badge/,'class="badge'):'No changeset'}</span></div>`}).join('')}</div></section></div>
+ <section class="panel"><h2>Repository activity</h2><ul class="tl">${EVENTS.filter(e=>e.repo===r).slice().reverse().map(e=>`<li style="--c:var(--${EV_C[e.k]})"><span class="tm">${e.t}</span><i class="nd"></i><span>${esc(e.tx)}</span></li>`).join('')||'<li><span></span><span></span><span class="muted">No activity.</span></li>'}</ul></section>`;
+};
+
+V.changesets=()=>{
+ const f=S.csF;
+ const L=CS.filter(c=>inRepo(c.repo)&&hit(c)&&(f==='all'||(f==='review'&&c.stage<5)||(f==='verified'&&c.ev==='independent')||(f==='attention'&&['agent','stale','declared'].includes(c.ev))));
+ const c=cs(S.cs)||CS[0];
+ const d=DIFFS[c.diff];
+ const stale=c.ev==='stale';
+ return head('Changeset Review & Verification','Review AI-generated changes and see exactly how much evidence supports each one. An agent reporting that its tests passed is never treated as verification.')+
+ `<div class="chips">${[['all','All'],['review','Needs review'],['verified','Independently validated'],['attention','Weak or stale evidence']].map(x=>`<button class="pill" aria-pressed="${f===x[0]}" data-act="chip" data-k="csF" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>
+ <section class="panel"><div class="tw"><table><thead><tr><th>Changeset</th><th>Agent</th><th>Repository</th><th>Task</th><th>Files</th><th>Semantic scopes</th><th>Evidence</th><th>Review</th><th>Fingerprint</th></tr></thead><tbody>${L.map(x=>`<tr data-act="pick-cs" data-id="${x.id}" class="${x.id===c.id?'sel':''}"><td class="mono nw">${x.id}</td><td>${agLabel(x.agent)}</td><td class="mono">${x.repo}</td><td>${esc(x.task)}</td><td>${x.files}</td><td class="mono">${esc(x.scopes)}</td><td>${evBadge(x)}</td><td>${esc(x.review)}</td><td class="mono">${x.fp}</td></tr>`).join('')||'<tr><td colspan="9" class="muted">No changesets match these filters.</td></tr>'}</tbody></table></div></section>
+ <section class="panel enter" key="${c.id}${c.ev}${c.stage}"><div class="ph"><h2>${c.id} · ${esc(c.task)}</h2>${evBadge(c)}</div>
+ ${lifeChips(c.stage,c.ev)}
+ <div class="cols" style="margin-top:14px"><div><h3>Change summary</h3><p class="small" style="margin:4px 0 10px">${agLabel(c.agent)} published ${c.files} changed files in <span class="mono">${c.repo}</span> against ${esc(c.scopes)}. Declared intent: ${it(ag(c.agent).intent)?it(ag(c.agent).intent).id:'—'}.</p>
+ <h3>Diff</h3>${d?`<div class="diff" style="margin-top:6px">${d.map(l=>l[0]==='h'?`<div class="hunk"><span class="n"></span><span class="n"></span><span class="x">${esc(l[1])}</span></div>`:`<div class="${l[0]==='a'?'add':l[0]==='d'?'del':''}"><span class="n">${l[1]}</span><span class="n">${l[2]}</span><span class="x">${l[0]==='a'?'+':l[0]==='d'?'−':' '} ${esc(l[3]!==undefined?l[3]:'')}</span></div>`).join('')}</div>`:'<p class="small muted">No diff is included for this changeset in the prototype.</p>'}
+ <h3 style="margin-top:12px">Reviewer comments</h3>${(COMMENTS[c.id]||[]).map(m=>`<div class="callout" style="margin-top:6px"><b>${m[0]}</b> · ${esc(m[1])}</div>`).join('')||'<p class="small muted">No comments yet.</p>'}</div>
+ <div><h3>Verification</h3>
+ ${stale?`<div class="callout" style="--c:var(--crit);margin:6px 0"><b>Previous evidence is stale.</b> Validated at <span class="mono">${c.vfp}</span>, but the candidate is now <span class="mono">${c.fp}</span>. Re-run verification before acceptance.</div>`:''}
+ <dl class="kv" style="margin-top:6px"><dt>Command</dt><dd class="mono">${esc(c.cmd)}</dd><dt>Result</dt><dd>${esc(c.res)}</dd><dt>Execution time</dt><dd>${c.time}</dd><dt>Candidate fingerprint</dt><dd class="mono">${c.fp}</dd><dt>Provenance</dt><dd>${c.by}</dd><dt>Evidence status</dt><dd>${evBadge(c)}</dd></dl>
+ ${c.ev==='running'?'<div class="bar run" style="margin-top:10px"><i></i></div>':''}
+ <div class="row" style="margin-top:12px"><button class="btn sm" data-act="cs-verify" data-id="${c.id}" ${c.ev==='running'||c.stage>=5?'disabled':''}>Run configured verification</button><button class="btn sm primary" data-act="cs-approve" data-id="${c.id}" ${c.stage>=5?'disabled':''}>Approve changeset</button><button class="btn sm" data-act="cs-commit" data-id="${c.id}" ${c.stage!==5?'disabled':''}>Commit</button></div>
+ <p class="small muted" style="margin-top:8px">Verification runs are simulated here. Approval is only available after independent validation of the current candidate.</p></div></div></section>`;
+};
+
+V.context=()=>{
+ const n=CTX[S.ctxNode];
+ const node=(k,extra)=>`<button class="node ${S.ctxNode===k?'sel':''}" data-act="ctx-node" data-id="${k}"><b>${esc(CTX[k].t)}</b><br><span class="small muted">${CTX[k].st} · ${esc(CTX[k].model)}</span></button>${extra||''}`;
+ const picked=FINDINGS.filter(f=>S.pick[f.id]);
+ const rec=picked.length?`Decision DR-019 (draft)\nQuestion: How should PaymentService support more providers?\nProposed selection: Branch C, PaymentProvider interface.\nEvidence selected:\n${picked.map(f=>`- Branch ${f.b}: ${f.t}`).join('\n')}\nResponsible: Maya Rahman`:'Select findings to prepare a decision record.';
+ return head('Context & Decision Explorer','A complementary view of the technical conversations and decisions behind engineering work. It does not replace GPTree\'s own branch, compare and merge experience.',B('GPTree link: proposed, not connected','ai'))+
+ `<div class="cols"><section class="panel"><h2>Context branches</h2><ul class="tree root"><li>${node('root',`<ul class="tree" style="margin-top:8px"><li>${node('A')}</li><li>${node('B')}</li><li>${node('C',`<ul class="tree" style="margin-top:8px"><li>${node('C1')}</li><li>${node('C2')}</li></ul>`)}</li></ul>`)}</li></ul></section>
+ <section class="panel enter" key="${S.ctxNode}"><h2>${esc(n.t)}</h2><dl class="kv" style="margin-top:8px"><dt>Decision status</dt><dd>${n.st}</dd><dt>Model</dt><dd>${esc(n.model)}</dd><dt>Related task</dt><dd>${esc(n.task)}</dd><dt>Connections</dt><dd>${n.links.map(l=>`<span class="pill">${esc(l)}</span>`).join(' ')}</dd></dl></section></div>
+ <section class="panel"><h2>Compare alternatives</h2><div class="tw"><table><thead><tr><th></th><th>A · Replace</th><th>B · Extend</th><th>C · Provider interface</th></tr></thead><tbody>${COMPARE.map(r=>`<tr><td class="muted nw">${r[0]}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td>${esc(r[3])}</td></tr>`).join('')}</tbody></table></div></section>
+ <div class="cols even"><section class="panel"><h2>Merge findings into a decision</h2><div class="alist">${FINDINGS.map(f=>`<label class="ck"><input type="checkbox" data-pick="${f.id}" ${S.pick[f.id]?'checked':''}><span><b>Branch ${f.b}</b> · ${esc(f.t)}</span></label>`).join('')}</div></section>
+ <section class="panel"><h2>Decision record</h2><textarea id="rec" rows="9" aria-label="Decision record">${esc(rec)}</textarea><div class="row" style="margin-top:8px"><button class="btn sm primary" data-act="ctx-record" ${picked.length?'':'disabled'}>Add to decision register</button><button class="btn sm" data-act="copy-rec">Copy</button></div></section></div>
+ <section class="panel"><h2>Decision register</h2><div class="tw"><table><thead><tr><th>ID</th><th>Question</th><th>Alternatives</th><th>Selected</th><th>Responsible</th><th>Evidence</th><th>Date</th></tr></thead><tbody>${DECISIONS.map(d=>`<tr><td class="mono">${d.id}</td><td>${esc(d.q)}</td><td>${esc(d.alts)}</td><td>${esc(d.sel)} ${d.draft?B('Draft','warn'):''}</td><td>${d.who}</td><td>${esc(d.ev)}</td><td>${d.date}</td></tr>`).join('')}</tbody></table></div></section>`;
+};
+
+function execUpdate(){
+ const done=CS.filter(c=>c.stage>=5).map(c=>`${c.task} (${c.id})`);
+ const prog=AGENTS.filter(a=>LIVE.has(a.status)||a.status==='Awaiting Review').map(a=>a.task);
+ const block=['CF-101 holds the Stripe and PayPal work until the design is agreed','CS-224 needs re-validation'];
+ return `Engineering update\n\nCompleted\n${done.map(x=>'- '+x).join('\n')||'- Nothing this period'}\n\nIn progress\n${prog.map(x=>'- '+x).join('\n')}\n\nBlocked\n${block.map(x=>'- '+x).join('\n')}\n\nDecisions required\n- Approve the PaymentProvider interface approach (DR-018)\n\nRisks\n- Two payment tasks may interfere with each other until the design is agreed\n\nNext milestones\n- Design agreed; Stripe and PayPal providers independently tested and reviewed`;
+}
+V.comms=()=>{
+ const m=S.commsMode,t=TECH[S.techSel];
+ const low=t.t.toLowerCase();
+ const found=Object.keys(GLOSS).filter(g=>low.includes(g));
+ const e2b=`<div class="cols"><section class="panel"><h2>Select technical activity</h2><div class="alist">${TECH.map((x,i)=>`<label class="ck"><input type="radio" name="tech" data-tech="${i}" ${S.techSel===i?'checked':''}><span>${esc(x.t)}</span></label>`).join('')}</div>
+ <div class="row" style="margin-top:12px"><button class="btn ai" data-act="gen-sum">Draft plain-language summary</button></div><p class="small muted" style="margin-top:6px">Drafts here come from prepared examples. No AI model is called in this prototype.</p></section>
+ <section class="panel"><h2>Business summary</h2><textarea id="sumOut" rows="5" aria-label="Business summary" placeholder="Draft a summary, then edit it here.">${esc(S.gen[S.techSel]||'')}</textarea>
+ <h3 style="margin-top:12px">Communication quality</h3>${found.length?`<div class="alist" style="margin-top:6px">${found.map(g=>`<div class="callout" style="--c:var(--warn)">Unexplained term: <b>${g}</b>. Plain meaning: ${GLOSS[g]}.</div>`).join('')}</div>`:'<p class="small muted">No unexplained terms found.</p>'}</section></div>`;
+ const b=S.briefOut;
+ const b2e=`<div class="cols"><section class="panel"><h2>Business request</h2><textarea id="reqIn" rows="5" aria-label="Business request">${esc(S.reqText)}</textarea><div class="row" style="margin-top:10px"><button class="btn ai" data-act="gen-brief">Create engineering brief</button></div></section>
+ <section class="panel"><h2>Structured brief</h2>${b?`<dl class="kv">${b.map(r=>`<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join('')}</dl>`:'<p class="small muted">Create a brief to see the objective, constraints, acceptance criteria and open questions.</p>'}</section></div>`;
+ const eu=S.execText!==undefined?S.execText:execUpdate();
+ return head('Engineering Communication Center','Turn technical complexity into clear decisions and meaningful updates.')+
+ `<div class="chips"><button class="pill" aria-pressed="${m==='e2b'}" data-act="chip" data-k="commsMode" data-v="e2b">Engineer to business</button><button class="pill" aria-pressed="${m==='b2e'}" data-act="chip" data-k="commsMode" data-v="b2e">Business to engineering</button></div>${m==='e2b'?e2b:b2e}
+ <section class="panel"><div class="ph"><h2>Executive update builder</h2>${B('Review before sharing','warn')}</div><textarea id="exec" rows="14" aria-label="Executive update">${esc(eu)}</textarea>
+ <div class="row" style="margin-top:10px"><label class="ck"><input type="checkbox" id="rev" ${S.reviewed?'checked':''}> I reviewed and edited this update</label><button class="btn sm primary" data-act="copy-exec" ${S.reviewed?'':'disabled'}>Copy update</button></div></section>`;
+};
+
+V.integrations=()=>{
+ const cmds=['agentbridge init --workspace northwind-payments','agentbridge repo connect payments-core','agentbridge agent add claude-code codex cursor','agentbridge verify --config verification.yml'];
+ return head('Integrations & Onboarding','Connect your existing AI development environment. Every integration here is a proposed touchpoint or a simulated connection.',`<button class="btn primary" data-act="wiz-open">Start onboarding</button>`)+
+ `<div class="grid">${INTEGRATIONS.filter(hit).map((x,i)=>`<div class="card" style="cursor:default"><div class="ph"><div class="mini"><span class="mono-av">${x.n[0]}</span><b>${x.n}</b></div>${B(x.s,INT_C[x.s])}</div><p class="small muted">${x.d}</p><p class="small">Last sync: ${x.sync}</p><p class="small muted">${x.caps.join(' · ')}</p><div><button class="btn sm" data-act="integ-config" data-i="${INTEGRATIONS.indexOf(x)}">Configure</button></div></div>`).join('')}</div>
+ <div class="cols even"><section class="panel"><h2>Command-line setup</h2><div class="alist">${cmds.map(c=>`<div class="pre"><code>${c}</code><button class="btn sm" data-act="copy" data-t="${esc(c)}">Copy</button></div>`).join('')}</div><p class="small muted" style="margin-top:8px">Illustrative commands for this concept. No AgentBridge CLI exists yet.</p></section>
+ <section class="panel"><div class="ph"><h2>Connection health</h2>${B('Simulated','teal')}</div><div class="tw"><table><tbody>${[['API status','Operational'],['Repository access','3 of 3 repositories'],['Agent availability','4 of 7 agents active'],['Last synchronization','1 min ago'],['Permission status','Agents publish; humans accept']].map(r=>`<tr><td class="muted">${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</tbody></table></div></section></div>`;
+};
+
+/* demo */
+const DEMO=[
+['Agent activity','Two agents are working in separate worktrees of the payments repository. Neither knows what the other plans.',()=>`<div class="grid">${['AG-1','AG-2'].map(id=>{const a=ag(id);return `<div class="card enter" style="cursor:default"><div class="ph"><b>${a.name} ${a.id}</b>${B('Planning','accent',1)}</div><p class="t">${esc(a.task)}</p><dl class="kv"><dt>Worktree</dt><dd class="mono">${a.wt}</dd><dt>Branch</dt><dd class="mono">${a.branch}</dd><dt>Declared intent</dt><dd>${B('Not published yet','gray')}</dd></dl></div>`}).join('')}</div>`],
+['Intent publication','Both agents publish what they intend to change before writing code. Declared intent is a plan, not completed work.',()=>`<div class="tw enter"><table><thead><tr><th>Intent</th><th>Agent</th><th>Declared scope</th><th>State</th></tr></thead><tbody><tr class="enter"><td class="mono">INT-0412</td><td>Claude Code</td><td class="mono">symbol:PaymentService=replace</td><td>${B('Declared · not implemented','gray')}</td></tr><tr class="enter" style="animation-delay:.5s"><td class="mono">INT-0413</td><td>Codex</td><td class="mono">symbol:PaymentService=extend</td><td>${B('Declared · not implemented','gray')}</td></tr></tbody></table></div>`],
+['Conflict detection','Both intents name the same semantic scope with different operations.',()=>`${pairMap(cf('CF-101'))}<div class="callout" style="--c:var(--warn);margin-top:10px"><b>Potential destructive vs additive conflict</b> (heuristic, advisory). ${esc(cf('CF-101').why)}</div>`],
+['Engineering review','A reviewer compares both approaches before either agent goes further.',()=>`<div class="cols even"><div class="callout" style="--c:var(--crit)"><b>Agent A: replace</b><br><span class="small">Remove the gateway-agnostic methods; call Stripe directly.</span><details style="margin-top:8px"><summary>Show sketch</summary><pre class="mono" style="margin:6px 0;overflow:auto">class StripePaymentService {\n  charge(order) { /* Stripe only */ }\n}</pre></details></div><div class="callout" style="--c:var(--warn)"><b>Agent B: extend</b><br><span class="small">Keep PaymentService; add a PayPal provider through a hook.</span><details style="margin-top:8px"><summary>Show sketch</summary><pre class="mono" style="margin:6px 0;overflow:auto">PaymentService.registerProvider(\n  new PayPalProvider()\n);</pre></details></div></div>`],
+['Coordinated decision','The reviewer proposes a shared design and records who is responsible.',()=>`<div class="panel" style="background:var(--surface)"><h3>Proposed resolution</h3><ol class="small" style="margin:8px 0;padding-left:18px"><li>Define a stable <span class="mono">PaymentProvider</span> interface.</li><li>Implement Stripe and PayPal as separate providers.</li><li>Migrate callers through a controlled plan.</li></ol><p class="small">Responsible engineer: <b>Maya Rahman</b></p><div class="row" style="margin-top:10px"><button class="btn primary sm" data-act="demo-record" ${S.D.recorded?'disabled':''}>${S.D.recorded?'Decision recorded (DR-018)':'Record decision'}</button></div></div>`],
+['Changeset review','Provisional changesets arrive. Neither is verified yet.',()=>`<div class="grid"><div class="card enter" style="cursor:default"><b>CS-224 · Stripe provider</b>${B('Provisional · agent-reported','warn')}<p class="small muted">11 files · implements PaymentProvider</p></div><div class="card enter" style="cursor:default;animation-delay:.5s"><b>CS-223 · PayPal provider</b>${B('Provisional · agent-reported','warn')}<p class="small muted">9 files · implements PaymentProvider</p></div></div>`],
+['Validation','The configured command runs against the candidate. Results here are simulated.',()=>`<div class="panel" style="background:var(--surface)"><dl class="kv"><dt>Command</dt><dd class="mono">pnpm test --filter payments-core</dd><dt>Candidate fingerprint</dt><dd class="mono">e19b7a4</dd><dt>Agent-reported</dt><dd>${B('96 passed · not verified','warn')}</dd><dt>Independent run</dt><dd>${S.D.verified?B('Independently validated (simulated)','teal'):B('Not run','gray')}</dd></dl>${S.D.verifying?'<div class="bar run" style="margin-top:10px"><i></i></div>':''}<div class="row" style="margin-top:10px"><button class="btn primary sm" data-act="demo-verify" ${S.D.verified||S.D.verifying?'disabled':''}>Run configured verification</button></div></div>`],
+['Acceptance','A human reviewer approves the validated changeset.',()=>`<div class="panel" style="background:var(--surface)"><p class="small">CS-224 · fingerprint <span class="mono">e19b7a4</span> · ${S.D.verified?B('Independently validated','teal'):B('Not validated','warn')}</p><div class="row" style="margin-top:10px"><button class="btn primary sm" data-act="demo-approve" ${!S.D.verified||S.D.approved?'disabled':''}>${S.D.approved?'Accepted by Maya Rahman':'Approve changeset'}</button></div>${!S.D.verified?'<p class="small muted" style="margin-top:8px">Run verification in the previous step first. Approval needs independent evidence.</p>':''}</div>`],
+['Outcome','',()=>{const D=S.D;const r=[['Agents coordinated','2 of 2',true],['Potential conflict identified','CF-101',true],['Engineering decision recorded',D.recorded?'DR-018':'Pending',D.recorded],['Changeset reviewed','CS-224',true],['Validation completed',D.verified?'Independent (simulated)':'Pending',D.verified],['Final status',D.approved?'Accepted':'In progress',D.approved]];
+ return `<p class="big">Understand Conflicts Before They Become Expensive Rework.</p><div class="grid" style="margin-top:14px">${r.map(x=>`<div class="card" style="cursor:default"><span class="small muted">${x[0]}</span><b>${esc(x[1])}</b>${B(x[2]?'Done':'Pending',x[2]?'green':'gray')}</div>`).join('')}</div><p class="small muted" style="margin-top:12px">Simulated prototype data. This is a proposed visual experience, not Foremerge execution or live repository verification.</p>`}]
+];
+V.demo=()=>{
+ const d=S.D.step,x=DEMO[d];
+ return head('The Agent Coordination Challenge','Two agents, one payments repository. Step through how a potential conflict is found, decided and verified.')+
+ `<div class="steps" role="tablist">${DEMO.map((s,i)=>`<button class="step ${i<d?'done':''}" role="tab" aria-current="${i===d?'step':'false'}" data-act="demo-go" data-i="${i}">${s[0]}</button>`).join('')}</div>
+ <section class="panel enter" key="${d}"><div class="ph"><h2>Step ${d+1} of ${DEMO.length}: ${x[0]}</h2>${B('Simulated','ai')}</div><p class="muted" style="margin-bottom:12px">${x[1]}</p>${x[2]()}</section>
+ <div class="row"><button class="btn" data-act="demo-prev" ${d===0?'disabled':''}>Previous</button><button class="btn primary" data-act="demo-next" ${d===DEMO.length-1?'disabled':''}>Next</button><button class="btn" data-act="demo-reset">Restart</button></div>`;
+};
+
+/* ---------- render ---------- */
+function renderSide(){
+ $('#side').innerHTML=`<div class="brand"><span class="logo"><svg viewBox="0 0 24 24"><path d="M3 17c4 0 4-10 9-10s5 10 9 10"/></svg></span><span>AgentBridge</span></div><div class="navlabel">Modules</div>`+NAV.map(n=>`<button class="nav" data-act="nav" data-v="${n[0]}" aria-current="${S.view===n[0]?'page':'false'}" title="${n[1]}">${ico(n[0])}<span>${n[1]}</span></button>`).join('')+`<div class="spacer"></div><button class="nav collapse" data-act="collapse" title="Collapse sidebar">${ico('overview')}<span>Collapse</span></button>`;
+}
+function renderTop(){
+ const sim=INTEGRATIONS.filter(i=>i.s==='Simulated connection').length,pro=INTEGRATIONS.filter(i=>i.s==='Proposed touchpoint').length;
+ $('#intStatus').innerHTML=`<i class="dot" style="--c:var(--teal);background:var(--teal)"></i>${sim} simulated · ${pro} proposed`;
+ $('#notif').innerHTML=[['CF-101 flagged on PaymentService','conflicts','conflict','CF-101'],['CS-224 evidence is stale','changesets','cs','CS-224'],['CS-221 awaits your review','changesets','cs','CS-221'],['INT-0418 claim is stale','intents','intent','INT-0418']].map(n=>`<button data-act="jump" data-v="${n[1]}" data-k="${n[2]}" data-id="${n[3]}">${esc(n[0])}</button>`).join('');
+}
+function render(scroll){
+ const v=$('#view');
+ v.innerHTML=V[S.view]();
+ renderSide();
+ $('#app').classList.toggle('col',S.collapsed);
+ document.title='AgentBridge';
+ v.querySelectorAll('[data-count]').forEach(el=>{const n=+el.dataset.count;if(matchMedia('(prefers-reduced-motion: reduce)').matches||!n)return;let s=null;const f=t=>{s=s||t;const p=Math.min(1,(t-s)/600);el.textContent=Math.round(n*p);if(p<1)requestAnimationFrame(f)};requestAnimationFrame(f)});
+ if(scroll)window.scrollTo({top:0});
+ renderTour();
+}
+function go(v){S.view=v;if(location.hash.slice(1)===v)render(true);else location.hash=v}
+window.addEventListener('hashchange',()=>{const v=location.hash.slice(1);if(V[v]){S.view=v;render(true)}});
+
+/* ---------- tour ---------- */
+const TOUR=[
+['View the agent fleet','Start with every agent across your repositories, its status and its current intent.',()=>{S.view='fleet';S.agent='AG-1'}],
+['Inspect two coding agents','Claude Code plans to replace PaymentService. Codex, in another worktree, plans to extend it.',()=>{S.view='fleet';S.agent='AG-2'}],
+['See their published intents','Each agent declared its scope and operation before writing code.',()=>{S.view='intents';S.intent='INT-0412'}],
+['Explore the potential conflict','A replace and an extend target the same symbol. The finding is advisory and explains why.',()=>{S.view='conflicts';S.conflict='CF-101'}],
+['Review the engineering decision','The proposed answer is a shared PaymentProvider interface, recorded as DR-018.',()=>{S.view='context';S.ctxNode='C'}],
+['Inspect the changeset','CS-224 changed after validation, so its earlier evidence is marked stale.',()=>{S.view='changesets';S.cs='CS-224'}],
+['Review the verification evidence','CS-221 has independent evidence tied to its exact fingerprint. Agent self-reports are labeled separately.',()=>{S.view='changesets';S.cs='CS-221'}],
+['Generate a business-friendly summary','Technical activity becomes a plain-language update that you review before sharing.',()=>{S.view='comms';S.commsMode='e2b';S.techSel=0}]
+];
+function renderTour(){
+ const t=$('#tour');
+ if(S.tour<0){t.hidden=true;return}
+ const s=TOUR[S.tour];t.hidden=false;
+ t.innerHTML=`<div class="ph"><span class="small muted">Guided tour · ${S.tour+1} of ${TOUR.length}</span><button class="btn sm" data-act="tour-end">End</button></div><b>${s[0]}</b><p class="small muted">${s[1]}</p><div class="row"><button class="btn sm" data-act="tour-back" ${S.tour===0?'disabled':''}>Back</button><button class="btn sm primary" data-act="tour-next">${S.tour===TOUR.length-1?'Finish':'Next'}</button></div>`;
+}
+function tourTo(i){S.tour=i;TOUR[i][2]();go(S.view)}
+
+/* ---------- modal & wizard ---------- */
+function modal(h){const m=$('#modal');m.innerHTML=`<div class="mbox" role="dialog" aria-modal="true">${h}</div>`;m.hidden=false;const f=m.querySelector('button,input,select');if(f)f.focus()}
+function closeModal(){$('#modal').hidden=true;$('#modal').innerHTML=''}
+const WSTEPS=[
+['Create workspace',[['name','Workspace name','text'],['region','Data region','select',['EU','US','APAC']]]],
+['Connect repository',[['host','Git host','select',['GitHub','GitLab']],['repo','Repository','select',['payments-core','ledger-api','web-checkout']]]],
+['Select coding agents',[['a_claude','Claude Code','check'],['a_codex','Codex','check'],['a_cursor','Cursor','check']]],
+['Configure integration providers',[['p_foremerge','Foremerge (proposed touchpoint)','check'],['p_gptree','GPTree (proposed touchpoint)','check'],['p_linear','Linear','check'],['p_jira','Jira','check']]],
+['Set project permissions',[['perm','Permission model','select',['Agents publish; humans accept','Agents read only','Agents publish and propose commits']],['human','Require human approval to accept','check']]],
+['Configure verification rules',[['cmd','Verification command','text'],['indep','Require independent verification before accepting','check'],['stale','Mark evidence stale when the candidate changes','check']]],
+['Invite team members',[['invites','Email addresses','text']]],
+['Review configuration',[]]
+];
+function wizHtml(){
+ const s=WSTEPS[W.step];
+ const fields=s[1].map(f=>{const k=f[0];if(f[2]==='text')return `<label class="f">${f[1]}<input type="text" data-w="${k}" value="${esc(W[k])}"></label>`;if(f[2]==='select')return `<label class="f">${f[1]}<select data-w="${k}">${f[3].map(o=>`<option ${W[k]===o?'selected':''}>${o}</option>`).join('')}</select></label>`;return `<label class="ck"><input type="checkbox" data-w="${k}" ${W[k]?'checked':''}>${f[1]}</label>`}).join('');
+ const rev=W.step===7?`<dl class="kv">${[['Workspace',W.name+' ('+W.region+')'],['Repository',W.host+' · '+W.repo],['Agents',['a_claude','a_codex','a_cursor'].filter(k=>W[k]).map(k=>k.slice(2)).join(', ')||'None'],['Providers',['p_foremerge','p_gptree','p_linear','p_jira'].filter(k=>W[k]).map(k=>k.slice(2)).join(', ')||'None'],['Permissions',W.perm],['Verification',W.cmd+(W.indep?' · independent required':'')],['Invites',W.invites]].map(r=>`<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join('')}</dl><div class="callout" style="--c:var(--warn);margin-top:10px">Finishing creates nothing real. This is a walkthrough of a proposed setup flow.</div>`:'';
+ return `<div class="ph"><h2>Step ${W.step+1} of ${WSTEPS.length}: ${s[0]}</h2><button class="btn sm" data-act="modal-close">Close</button></div><div class="alist">${fields}</div>${rev}<div class="row"><button class="btn" data-act="wiz-back" ${W.step===0?'disabled':''}>Back</button><button class="btn primary" data-act="wiz-next">${W.step===7?'Finish':'Next'}</button></div>`;
+}
+
+/* ---------- actions ---------- */
+const nowT=()=>new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+const ACT={
+ nav:e=>{go(e.dataset.v);$('#notif').hidden=true},
+ jump:e=>{const k=e.dataset.k;if(k==='conflict')S.conflict=e.dataset.id;if(k==='intent')S.intent=e.dataset.id;if(k==='cs')S.cs=e.dataset.id;$('#notif').hidden=true;go(e.dataset.v)},
+ collapse:()=>{S.collapsed=!S.collapsed;render()},
+ notif:()=>{const n=$('#notif');n.hidden=!n.hidden},
+ period:e=>{S.period=+e.dataset.v;render()},
+ chip:e=>{S[e.dataset.k]=e.dataset.v;render()},
+ 'pick-agent':e=>{S.agent=e.dataset.id;if(S.view!=='fleet')go('fleet');else render()},
+ 'pick-agent-nav':e=>{S.agent=e.dataset.id;go('fleet')},
+ 'pick-intent':e=>{S.intent=e.dataset.id;if(S.view!=='intents')go('intents');else render()},
+ 'pick-conf':e=>{S.conflict=e.dataset.id;render()},
+ 'pick-cs':e=>{S.cs=e.dataset.id;render()},
+ 'pick-repo':e=>{S.repoSel=e.dataset.id;render()},
+ 'conf-act':e=>{const c=cf(S.conflict),a=e.dataset.a;
+  const m={ack:['Acknowledged','Finding acknowledged by Maya Rahman.'],revise:['Revision requested','Asked both agents to revise their declared intent.'],iface:['Revision requested','Proposed a shared PaymentProvider interface to both agents.'],reassign:[null,'Task reassignment proposed for review.'],split:[null,'Scope split proposed: interface first, providers second.'],decide:['Decision recorded','Decision recorded by Maya Rahman.'],close:['Closed','Finding closed.']}[a];
+  if(m[0])c.status=m[0];(S.log[c.id]=S.log[c.id]||[]).push([nowT(),m[1]]);render();toast(m[1])},
+ 'cs-verify':e=>{const c=cs(e.dataset.id);c.ev='running';render();setTimeout(()=>{c.ev='independent';c.vfp=null;c.res='Simulated run passed';c.time='41 s';c.by='AgentBridge runner (simulated)';c.stage=Math.max(c.stage,4);if(c.id==='CS-222'){c.fp='c7d02be';c.res='48 passed (independent, simulated)'}if(c.id==='CS-224'){c.fp='f03c8d1';c.res='96 passed at f03c8d1'}render();toast(c.id+' independently validated against '+c.fp+' (simulated)')},1900)},
+ 'cs-approve':e=>{const c=cs(e.dataset.id);if(c.ev!=='independent'){toast('Blocked: '+c.id+' has no independent validation of its current candidate.');return}c.stage=5;c.review='Accepted';render();toast(c.id+' accepted')},
+ 'cs-commit':e=>{const c=cs(e.dataset.id);c.stage=6;c.hash='c'+Math.random().toString(16).slice(2,8);render();toast(c.id+' committed as '+c.hash+' (simulated)')},
+ 'ctx-node':e=>{S.ctxNode=e.dataset.id;render()},
+ 'ctx-record':()=>{const n=DECISIONS.length+16;DECISIONS.push({id:'DR-0'+n,q:'How should PaymentService support more providers?',alts:'Replace, extend, provider interface',sel:'Provider interface (draft)',who:'Maya Rahman',ev:FINDINGS.filter(f=>S.pick[f.id]).map(f=>f.id).join(', '),date:'Nov 17',draft:true});S.pick={};render();toast('Added to the decision register')},
+ 'copy-rec':()=>copy($('#rec').value),
+ 'gen-sum':()=>{S.gen[S.techSel]=TECH[S.techSel].b;render()},
+ 'gen-brief':()=>{S.reqText=$('#reqIn').value;const t=S.reqText,vague=/holiday|soon|asap|quickly|before|later/i.test(t);S.briefOut=[['Business objective',t],['User problem','Customers cannot pay with a method they prefer at checkout.'],['Desired outcome','The requested payment option is available to customers.'],['Constraints','Needs the payment provider design (DR-018) to be agreed first.'],['Priority','To be set by the requester'],['Acceptance criteria','Customers can complete a purchase using the requested method. Refunds and receipts work.'],['Questions for engineering','What is the earliest safe release date given CF-101? Which markets are in scope?'],['Quality flags',vague?'The timing is vague. Add a date or range.':'No unclear terms detected.']];render()},
+ 'copy-exec':()=>copy($('#exec').value),
+ 'integ-config':e=>{const x=INTEGRATIONS[+e.dataset.i];modal(`<div class="ph"><h2>${x.n}</h2><button class="btn sm" data-act="modal-close">Close</button></div><p class="small muted">${x.d}</p>${B(x.s,INT_C[x.s])}<div class="alist">${x.caps.map(c=>`<label class="ck"><input type="checkbox" checked> ${c}</label>`).join('')}</div><div class="callout" style="--c:var(--warn)">No live connection can be made from this prototype. ${x.s==='Proposed touchpoint'?'This integration is a proposal and does not exist today.':''}</div><div class="row"><button class="btn primary" data-act="integ-toggle" data-i="${e.dataset.i}">${x.s==='Simulated connection'?'Disable simulation':'Enable simulated connection'}</button></div>`)},
+ 'integ-toggle':e=>{const x=INTEGRATIONS[+e.dataset.i];x.s=x.s==='Simulated connection'?'Not configured':'Simulated connection';x.sync=x.s==='Simulated connection'?'just now':'Never';closeModal();renderTop();render()},
+ 'wiz-open':()=>{W.step=0;modal(wizHtml())},
+ 'wiz-next':()=>{if(W.step===7){closeModal();toast('Walkthrough complete. Nothing was created.');return}W.step++;modal(wizHtml())},
+ 'wiz-back':()=>{W.step--;modal(wizHtml())},
+ 'modal-close':closeModal,
+ copy:e=>copy(e.dataset.t),
+ 'demo-go':e=>{S.D.step=+e.dataset.i;render()},
+ 'demo-next':()=>{S.D.step=Math.min(DEMO.length-1,S.D.step+1);render()},
+ 'demo-prev':()=>{S.D.step=Math.max(0,S.D.step-1);render()},
+ 'demo-reset':()=>{S.D={step:0,recorded:false,verified:false,approved:false};render()},
+ 'demo-record':()=>{S.D.recorded=true;render();toast('Decision DR-018 recorded (simulated)')},
+ 'demo-verify':()=>{S.D.verifying=true;render();setTimeout(()=>{S.D.verifying=false;S.D.verified=true;if(S.view==='demo')render();toast('Verification passed (simulated)')},1900)},
+ 'demo-approve':()=>{S.D.approved=true;render();toast('Changeset accepted (simulated)')},
+ 'tour-start':()=>tourTo(0),
+ 'tour-next':()=>{if(S.tour===TOUR.length-1){S.tour=-1;renderTour();toast('Tour finished');return}tourTo(S.tour+1)},
+ 'tour-back':()=>tourTo(Math.max(0,S.tour-1)),
+ 'tour-end':()=>{S.tour=-1;renderTour()}
+};
+document.addEventListener('click',ev=>{
+ if(!ev.target.closest('.pop'))$('#notif').hidden=true;
+ if(ev.target.id==='modal'){closeModal();return}
+ const e=ev.target.closest('[data-act]');if(!e||e.disabled)return;
+ const f=ACT[e.dataset.act];if(f)f(e);
+});
+document.addEventListener('keydown',ev=>{
+ if(ev.key==='Escape'&&!$('#modal').hidden)closeModal();
+ if((ev.key==='Enter'||ev.key===' ')&&ev.target.matches('.card[data-act],.map g[data-act]')){ev.preventDefault();ev.target.dispatchEvent(new MouseEvent('click',{bubbles:true}))}
+});
+document.addEventListener('change',ev=>{
+ const t=ev.target;
+ if(t.id==='repoSel'){S.repo=t.value;render();return}
+ if(t.dataset.f){S[t.dataset.f]=t.value;render();return}
+ if(t.dataset.pick){S.pick[t.dataset.pick]=t.checked;const sc=window.scrollY;render();window.scrollTo({top:sc});return}
+ if(t.dataset.tech!==undefined){S.techSel=+t.dataset.tech;render();return}
+ if(t.id==='rev'){S.reviewed=t.checked;S.keepExec=$('#exec').value;render();return}
+ if(t.dataset.w){W[t.dataset.w]=t.type==='checkbox'?t.checked:t.value}
+});
+document.addEventListener('input',ev=>{
+ const t=ev.target;
+ if(t.id==='q'){S.q=t.value;render();return}
+ if(t.id==='reqIn')S.reqText=t.value;
+ if(t.id==='exec')S.execText=t.value;
+ if(t.id==='sumOut')S.gen[S.techSel]=t.value;
+ if(t.dataset.w&&t.type==='text')W[t.dataset.w]=t.value;
+});
+
+renderTop();
+const h0=location.hash.slice(1);if(V[h0])S.view=h0;
+render();
+</script>
+
+</body></html>
